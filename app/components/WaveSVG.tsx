@@ -72,10 +72,43 @@ const applyOceanWave = (
     const combinedWaveY = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2);
     const combinedWaveX = (waveX1 * 0.4 + waveX2 * 0.3);
     
-    // Apply wave distortion - more vertical movement (like ocean waves)
-    const distortion = isY
+    // Add random narrowing/widening effect
+    // Create regions for scaling (narrowing/widening)
+    const scaleGridSize = 100;
+    const scaleGridX = Math.floor(x / scaleGridSize);
+    const scaleGridY = Math.floor(y / scaleGridSize);
+    const scaleRegionId = pathIndex * 1000 + scaleGridX * 50 + scaleGridY;
+    
+    // Random scaling that changes over time (narrowing/widening)
+    const scaleTimeSlot = Math.floor(time / 4); // Changes every 4 seconds
+    const scaleSeed = scaleRegionId + scaleTimeSlot * 10000;
+    const scaleValue = Math.sin(scaleSeed) * 0.2 + 1.0; // 0.8 to 1.2 (20% narrowing/widening)
+    
+    // Smooth transition between scale changes
+    const scaleProgress = (time % 4) / 4;
+    const smoothScaleProgress = scaleProgress * scaleProgress * (3 - 2 * scaleProgress);
+    const nextScaleSeed = scaleSeed + 10000;
+    const nextScaleValue = Math.sin(nextScaleSeed) * 0.2 + 1.0;
+    const currentScale = scaleValue + (nextScaleValue - scaleValue) * smoothScaleProgress;
+    
+    // Calculate approximate center from current coordinates
+    // Use a simple approach: scale relative to the coordinate itself
+    // For narrowing/widening: scale the coordinate value
+    const scaleFactor = (currentScale - 1.0) * 0.4; // 40% of scale change
+    
+    // Apply ocean wave distortion
+    const waveDistortion = isY
       ? combinedWaveY * waveIntensity
       : combinedWaveX * waveIntensity * 0.6;
+    
+    // Apply scaling distortion (narrowing/widening)
+    // This creates the effect of the shape getting wider or narrower
+    const scaleDistortion = isY
+      ? num.value * scaleFactor // Vertical scaling (stretch/compress)
+      : num.value * scaleFactor * 0.7; // Horizontal scaling (widen/narrow)
+    
+    // Combine ocean waves with narrowing/widening
+    const distortion = waveDistortion + scaleDistortion;
 
     const newValue = num.value + distortion;
     
