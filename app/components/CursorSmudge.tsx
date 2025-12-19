@@ -28,10 +28,12 @@ export default function CursorSmudge() {
   const timeRef = useRef(0);
   const [zoom, setZoom] = useState(1.0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [blurRegions, setBlurRegions] = useState<Array<{ x: number; y: number; size: number; blur: number; vx: number; vy: number }>>([]);
   const bodyRef = useRef<HTMLBodyElement | null>(null);
   const ripplesRef = useRef<Ripple[]>([]);
   const isMobileRef = useRef(false);
   const randomMovementRef = useRef<{ x: number; y: number; targetX: number; targetY: number; lastMove: number } | null>(null);
+  const blurRegionsRef = useRef<Array<{ x: number; y: number; size: number; blur: number; vx: number; vy: number }>>([]);
 
   useEffect(() => {
     // Detect mobile device
@@ -58,6 +60,19 @@ export default function CursorSmudge() {
       };
       setMousePos({ x: randomMovementRef.current.x, y: randomMovementRef.current.y });
     }
+    
+    // Initialize blur regions - create multiple regions with different blur levels
+    const numRegions = 8;
+    const initialRegions = Array.from({ length: numRegions }, (_, i) => ({
+      x: (window.innerWidth / numRegions) * i + Math.random() * (window.innerWidth / numRegions),
+      y: Math.random() * window.innerHeight,
+      size: 200 + Math.random() * 300,
+      blur: 1 + Math.random() * 8, // Blur between 1-9px
+      vx: (Math.random() - 0.5) * 0.5, // Horizontal velocity
+      vy: (Math.random() - 0.5) * 0.5, // Vertical velocity
+    }));
+    blurRegionsRef.current = initialRegions;
+    setBlurRegions(initialRegions);
 
     // Set canvas size
     const resizeCanvas = () => {
@@ -195,6 +210,56 @@ export default function CursorSmudge() {
       setZoom(currentZoom);
       setCurrentTime(timeRef.current);
       
+      // Animate blur regions - move them around and change blur levels
+      const updatedRegions = blurRegionsRef.current.map((region, index) => {
+        // Update position
+        let newX = region.x + region.vx;
+        let newY = region.y + region.vy;
+        let newVx = region.vx;
+        let newVy = region.vy;
+        
+        // Bounce off edges
+        if (newX < 0 || newX > window.innerWidth) {
+          newVx *= -1;
+          newX = Math.max(0, Math.min(window.innerWidth, newX));
+        }
+        if (newY < 0 || newY > window.innerHeight) {
+          newVy *= -1;
+          newY = Math.max(0, Math.min(window.innerHeight, newY));
+        }
+        
+        // Animate blur level (changes over time)
+        let newBlur = 1 + Math.sin(timeRef.current * 0.8 + index * 0.5) * 4 + Math.cos(timeRef.current * 0.6 + index) * 3;
+        newBlur = Math.max(0.5, Math.min(12, newBlur)); // Clamp between 0.5-12px
+        
+        let newSize = region.size;
+        // Occasionally change size
+        if (Math.random() < 0.01) {
+          newSize = 150 + Math.random() * 400;
+        }
+        
+        // Occasionally reverse direction (creates more chaotic movement)
+        if (Math.random() < 0.005) {
+          newVx = (Math.random() - 0.5) * 0.8;
+          newVy = (Math.random() - 0.5) * 0.8;
+        }
+        
+        return {
+          x: newX,
+          y: newY,
+          size: newSize,
+          blur: newBlur,
+          vx: newVx,
+          vy: newVy,
+        };
+      });
+      
+      blurRegionsRef.current = updatedRegions;
+      // Update state every few frames for performance
+      if (Math.floor(timestamp) % 16 < 8) { // Update roughly every other frame
+        setBlurRegions([...updatedRegions]);
+      }
+      
       // Update and apply water ripples to SVG elements
       const rippleDuration = 2000; // 2 seconds for longer visibility
       ripplesRef.current = ripplesRef.current.filter((ripple) => {
@@ -302,10 +367,11 @@ export default function CursorSmudge() {
         const radius = 120 * trail.intensity;
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
         
-        // Prism-like color mixing - rainbow effect
-        const hue1 = (timeRef.current * 50 + index * 10) % 360;
-        const hue2 = (hue1 + 60) % 360;
-        const hue3 = (hue1 + 120) % 360;
+        // Ocean-inspired color mixing - blues and teals
+        const baseHue = 200 + Math.sin(timeRef.current * 0.5 + index * 0.3) * 30; // 170-230 (blues/teals)
+        const hue1 = baseHue;
+        const hue2 = baseHue + 20; // Slightly different blue
+        const hue3 = baseHue + 40; // Teal variant
         
         gradient.addColorStop(0, `hsla(${hue1}, 70%, 60%, ${0.4 * trail.intensity})`);
         gradient.addColorStop(0.33, `hsla(${hue2}, 70%, 60%, ${0.3 * trail.intensity})`);
@@ -373,14 +439,14 @@ export default function CursorSmudge() {
           cursorRadius
         );
         
-        // Dynamic prism effect - colors shift over time
-        const baseHue = (timeRef.current * 30) % 360;
+        // Ocean-inspired colors - blues, teals, and cyan
+        const baseHue = 200 + Math.sin(timeRef.current * 0.4) * 40; // 160-240 (blues/teals/cyan)
         cursorGradient.addColorStop(0, `hsla(${baseHue}, 80%, 65%, 0.5)`);
-        cursorGradient.addColorStop(0.2, `hsla(${(baseHue + 60) % 360}, 80%, 65%, 0.4)`);
-        cursorGradient.addColorStop(0.4, `hsla(${(baseHue + 120) % 360}, 80%, 65%, 0.35)`);
-        cursorGradient.addColorStop(0.6, `hsla(${(baseHue + 180) % 360}, 80%, 65%, 0.3)`);
-        cursorGradient.addColorStop(0.8, `hsla(${(baseHue + 240) % 360}, 80%, 65%, 0.2)`);
-        cursorGradient.addColorStop(1, `hsla(${(baseHue + 300) % 360}, 80%, 65%, 0.1)`);
+        cursorGradient.addColorStop(0.2, `hsla(${baseHue + 15}, 80%, 65%, 0.4)`);
+        cursorGradient.addColorStop(0.4, `hsla(${baseHue + 30}, 80%, 65%, 0.35)`);
+        cursorGradient.addColorStop(0.6, `hsla(${baseHue + 45}, 80%, 65%, 0.3)`);
+        cursorGradient.addColorStop(0.8, `hsla(${baseHue + 60}, 80%, 65%, 0.2)`);
+        cursorGradient.addColorStop(1, `hsla(${baseHue + 75}, 80%, 65%, 0.1)`);
 
         ctx.fillStyle = cursorGradient;
         ctx.beginPath();
@@ -393,7 +459,7 @@ export default function CursorSmudge() {
           const ringIntensity = 0.2 / i;
           const ringWave = Math.sin(timeRef.current * 2 + i) * 5;
           
-          ctx.strokeStyle = `hsla(${(baseHue + i * 40) % 360}, 70%, 60%, ${ringIntensity})`;
+          ctx.strokeStyle = `hsla(${baseHue + i * 15}, 70%, 60%, ${ringIntensity})`;
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(
@@ -468,12 +534,12 @@ export default function CursorSmudge() {
                   marginLeft: `-${ringRadius}px`,
                   marginTop: `-${ringRadius}px`,
                   borderRadius: "50%",
-                  border: `2px solid hsla(${(currentTime * 30 + i * 60) % 360}, 70%, 60%, ${ringOpacity})`,
+                  border: `2px solid hsla(${200 + Math.sin(currentTime * 0.3 + i) * 40 + i * 10}, 70%, 60%, ${ringOpacity})`,
                   pointerEvents: "none",
                   zIndex: 10001,
                   transform: `scale(${ringScale})`,
                   transition: "transform 0.1s ease-out, opacity 0.1s ease-out",
-                  boxShadow: `0 0 ${ringRadius * 0.5}px hsla(${(currentTime * 30 + i * 60) % 360}, 70%, 60%, ${ringOpacity * 0.5})`,
+                  boxShadow: `0 0 ${ringRadius * 0.5}px hsla(${200 + Math.sin(currentTime * 0.3 + i) * 40 + i * 10}, 70%, 60%, ${ringOpacity * 0.5})`,
                 }}
               />
             );
@@ -508,6 +574,29 @@ export default function CursorSmudge() {
           </div>
         </>
       )}
+      {/* Animated blur regions - create inconsistent blur areas */}
+      {blurRegions.map((region, index) => (
+        <div
+          key={index}
+          style={{
+            position: "fixed",
+            left: `${region.x}px`,
+            top: `${region.y}px`,
+            width: `${region.size}px`,
+            height: `${region.size}px`,
+            marginLeft: `-${region.size / 2}px`,
+            marginTop: `-${region.size / 2}px`,
+            borderRadius: "50%",
+            pointerEvents: "none",
+            zIndex: 9998,
+            backdropFilter: `blur(${region.blur}px)`,
+            WebkitBackdropFilter: `blur(${region.blur}px)`,
+            transition: "backdrop-filter 0.1s linear",
+            mixBlendMode: "normal",
+            opacity: 0.6,
+          }}
+        />
+      ))}
       {/* Prism overlay that distorts the view */}
       <div
         style={{
@@ -517,14 +606,13 @@ export default function CursorSmudge() {
           width: "100%",
           height: "100%",
           pointerEvents: "none",
-          zIndex: 9998,
+          zIndex: 9997,
           background: `radial-gradient(circle at ${mousePos.x}px ${mousePos.y}px, 
-            rgba(255, 0, 150, 0.1) 0%,
-            rgba(0, 150, 255, 0.08) 25%,
-            rgba(150, 255, 0, 0.06) 50%,
-            rgba(255, 150, 0, 0.04) 75%,
+            rgba(50, 150, 255, 0.1) 0%,
+            rgba(100, 200, 255, 0.08) 25%,
+            rgba(150, 220, 255, 0.06) 50%,
+            rgba(200, 240, 255, 0.04) 75%,
             transparent 100%)`,
-          transition: "opacity 0.3s ease-out",
           mixBlendMode: "overlay",
         }}
       />
