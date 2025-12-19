@@ -181,10 +181,10 @@ export default function WaveSVG({
         const originalPath = originalPathsRef.current.get(path);
         if (!originalPath) return;
 
-        // Ocean wave intensity - visible but smooth
-        const baseIntensity = 8; // Base wave strength
-        const variation = Math.sin(elapsed * 0.4 + index * 0.3) * 3; // Gentle variation
-        const waveIntensity = baseIntensity + variation; // 5-11 range
+        // Ocean wave intensity - reduced pulsation
+        const baseIntensity = 3; // Reduced base wave strength
+        const variation = Math.sin(elapsed * 0.4 + index * 0.3) * 1; // Smaller variation
+        const waveIntensity = baseIntensity + variation; // 2-4 range (much less pulsation)
         
         const distortedPath = applyOceanWave(
           originalPath, 

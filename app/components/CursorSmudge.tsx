@@ -34,6 +34,7 @@ interface Particle {
   angle?: number;
   radius?: number;
   angularVelocity?: number;
+  type?: 'normal' | 'higgs';
 }
 
 export default function CursorSmudge() {
@@ -53,6 +54,7 @@ export default function CursorSmudge() {
   const randomMovementRef = useRef<{ x: number; y: number; targetX: number; targetY: number; lastMove: number } | null>(null);
   const blurRegionsRef = useRef<Array<{ x: number; y: number; size: number; blur: number; vx: number; vy: number }>>([]);
   const lastParticleSpawnRef = useRef(0);
+  const lastHiggsSpawnRef = useRef(0);
 
   useEffect(() => {
     // Detect mobile device
@@ -103,7 +105,7 @@ export default function CursorSmudge() {
 
     // Track mouse position with velocity
     let lastRippleTime = 0;
-    const rippleInterval = 150; // Create new ripple every 150ms
+    const rippleInterval = 600; // Create new ripple every 600ms (less frequent)
     
     const handleMouseMove = (e: MouseEvent) => {
       const now = Date.now();
@@ -340,13 +342,13 @@ export default function CursorSmudge() {
               
               // Create distortion that pushes content outward (like water)
               const angle = Math.atan2(rippleDy, rippleDx);
-              const distortionStrength = waveAmplitude * 20 * ripple.intensity; // Increased distortion
+              const distortionStrength = waveAmplitude * 40 * ripple.intensity; // Stronger distortion (doubled)
               
               totalDistortionX += Math.cos(angle) * distortionStrength;
               totalDistortionY += Math.sin(angle) * distortionStrength;
               
               // Add scale effect from ripple (creates depth)
-              const scaleEffect = 1 + waveAmplitude * 0.08 * ripple.intensity;
+              const scaleEffect = 1 + waveAmplitude * 0.15 * ripple.intensity; // Stronger scale effect
               totalScale *= scaleEffect;
             }
           });
@@ -582,6 +584,46 @@ export default function CursorSmudge() {
         lastParticleSpawnRef.current = now;
       }
       
+      // Spawn Higgs boson more frequently (every 2-4 seconds)
+      const higgsSpawnInterval = 2000 + Math.random() * 2000; // 2-4 seconds
+      if (now - lastHiggsSpawnRef.current > higgsSpawnInterval) {
+        // Spawn from anywhere on screen
+        const startX = Math.random() * canvas.width;
+        const startY = Math.random() * canvas.height;
+        
+        // Calculate viewport diagonal for path length reference
+        const viewportDiagonal = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
+        
+        // Path length: 150% to 300% of viewport diagonal (much longer trajectories)
+        const pathLength = viewportDiagonal * (1.5 + Math.random() * 1.5); // 1.5 to 3.0
+        
+        // Random direction
+        const angle = Math.random() * Math.PI * 2;
+        
+        // Calculate end position
+        const endX = startX + Math.cos(angle) * pathLength;
+        const endY = startY + Math.sin(angle) * pathLength;
+        
+        // Fast but noticeable speed - travel time based on path length
+        // Longer paths take proportionally longer, but still fast
+        const baseSpeed = viewportDiagonal / 300; // Base speed: cross viewport in ~300ms
+        const travelTime = pathLength / baseSpeed; // Proportional to path length
+        
+        particlesRef.current.push({
+          x: startX,
+          y: startY,
+          vx: Math.cos(angle) * baseSpeed,
+          vy: Math.sin(angle) * baseSpeed,
+          life: 0,
+          maxLife: travelTime,
+          size: 2 + Math.random() * 2, // Small: 2-4 pixels
+          trajectory: 'straight',
+          type: 'higgs',
+        });
+        
+        lastHiggsSpawnRef.current = now;
+      }
+      
       // Update and draw particles
       particlesRef.current = particlesRef.current.filter((particle) => {
         // Update position based on trajectory
@@ -597,16 +639,20 @@ export default function CursorSmudge() {
         
         particle.life += 16; // Approximate frame time
         
-        // Remove if off screen or expired
-        if (particle.life > particle.maxLife ||
-            particle.x < -100 || particle.x > canvas.width + 100 ||
-            particle.y < -100 || particle.y > canvas.height + 100) {
+        // Remove if expired
+        // For Higgs boson, only remove when expired (not when off-screen) to allow long trajectories
+        if (particle.life > particle.maxLife) {
+          return false;
+        }
+        
+        // For other particles, remove if off screen
+        if (particle.type !== 'higgs' && 
+            (particle.x < -100 || particle.x > canvas.width + 100 ||
+             particle.y < -100 || particle.y > canvas.height + 100)) {
           return false;
         }
         
         // Draw particle - unisex colors
-        const particleHue = 30 + Math.random() * 120; // Orange/yellow/green range (30-150)
-        const alpha = 1 - (particle.life / particle.maxLife) * 0.3; // Fade slightly
         const size = particle.size || 1; // Ensure size is always defined and valid
         
         // Validate particle position and size
@@ -614,8 +660,15 @@ export default function CursorSmudge() {
           return false; // Skip invalid particles
         }
         
-        if (size === 1) {
+        if (particle.type === 'higgs') {
+          // Higgs boson - pure black dot, like a cut
+          ctx.fillStyle = 'rgba(0, 0, 0, 1)'; // Pure black
+          ctx.fillRect(Math.floor(particle.x - size / 2), Math.floor(particle.y - size / 2), size, size);
+        } else if (size === 1) {
           // Small 1px particle
+          const particleHue = 30 + Math.random() * 120; // Orange/yellow/green range (30-150)
+          const alpha = 1 - (particle.life / particle.maxLife) * 0.3; // Fade slightly
+          
           ctx.fillStyle = `hsla(${particleHue}, 80%, 70%, ${alpha})`;
           ctx.fillRect(Math.floor(particle.x), Math.floor(particle.y), 1, 1);
           
@@ -624,6 +677,9 @@ export default function CursorSmudge() {
           ctx.fillRect(Math.floor(particle.x) - 1, Math.floor(particle.y) - 1, 3, 3);
         } else {
           // Big particle - draw as circle with gradient
+          const particleHue = 30 + Math.random() * 120; // Orange/yellow/green range (30-150)
+          const alpha = 1 - (particle.life / particle.maxLife) * 0.3; // Fade slightly
+          
           const gradient = ctx.createRadialGradient(
             particle.x, particle.y, 0,
             particle.x, particle.y, size
@@ -653,31 +709,31 @@ export default function CursorSmudge() {
         const progress = age / rippleDuration;
         
         if (progress < 1) {
-          // Draw multiple concentric circles for each ripple
-          const numRings = 5; // More rings for better visibility
-          const ringSpacing = 40; // Spacing between rings
+          // Draw multiple concentric circles for each ripple (stronger visual)
+          const numRings = 6; // More rings for stronger effect
+          const ringSpacing = 50; // Wider spacing between rings
           
           for (let ring = 0; ring < numRings; ring++) {
             const ringRadius = ripple.radius - ring * ringSpacing;
             
             // Only draw if ring is positive radius and visible
             if (ringRadius > 0) {
-              // Calculate opacity based on distance from center and time
+              // Calculate opacity based on distance from center and time (stronger)
               const ringProgress = ring / numRings;
-              const ringOpacity = (1 - ringProgress) * ripple.intensity * 0.6;
+              const ringOpacity = (1 - ringProgress) * ripple.intensity * 0.9; // Increased from 0.6 to 0.9
               
               // Alternate between green and orange for better visibility
               const hue = 60 + (ring % 2) * 60; // 60 (yellow) or 120 (green)
               
-              ctx.strokeStyle = `hsla(${hue}, 70%, 60%, ${ringOpacity})`;
-              ctx.lineWidth = 2;
+              ctx.strokeStyle = `hsla(${hue}, 80%, 65%, ${ringOpacity})`; // Higher saturation and lightness
+              ctx.lineWidth = 3; // Thicker lines (increased from 2)
               ctx.beginPath();
               ctx.arc(ripple.x, ripple.y, ringRadius, 0, Math.PI * 2);
               ctx.stroke();
               
-              // Add glow effect
-              ctx.shadowBlur = 10;
-              ctx.shadowColor = `hsla(${hue}, 70%, 60%, ${ringOpacity * 0.5})`;
+              // Add stronger glow effect
+              ctx.shadowBlur = 15; // Increased from 10
+              ctx.shadowColor = `hsla(${hue}, 80%, 65%, ${ringOpacity * 0.7})`; // Stronger shadow
               ctx.stroke();
               ctx.shadowBlur = 0;
             }
