@@ -8,8 +8,8 @@ interface WaveSVGProps {
   height?: number;
 }
 
-// Parse SVG path and apply wave distortion
-const applyWaveToPath = (
+// Parse SVG path and apply ocean wave effect
+const applyOceanWave = (
   pathData: string,
   time: number,
   waveIntensity: number = 1,
@@ -30,39 +30,57 @@ const applyWaveToPath = (
 
   if (matches.length === 0) return pathData;
 
-  // Build new path with wave distortion
+  // Build new path with ocean wave distortion
   let result = "";
   let lastIndex = 0;
 
-  matches.forEach((num, index) => {
+  matches.forEach((num, numIndex) => {
     // Add text before this number
     result += pathData.substring(lastIndex, num.index);
 
-    // Apply wave distortion with multiple frequencies for more complex waves
-    const isY = index % 2 === 1;
+    const isY = numIndex % 2 === 1;
+    const x = numIndex % 2 === 0 ? num.value : (matches[numIndex - 1]?.value || 0);
+    const y = isY ? num.value : (matches[numIndex + 1]?.value || 0);
     
-    // Multiple wave frequencies for organic, balanced effect
-    const wave1 = isY
-      ? Math.sin(time * 2.5 + num.value * 0.012 + pathIndex) * waveIntensity
-      : Math.cos(time * 2.0 + num.value * 0.012 + pathIndex) * waveIntensity * 0.6;
+    // Create smooth ocean waves using sine/cosine
+    // Multiple wave frequencies for realistic ocean effect
+    const waveLength1 = 200; // Long, slow waves
+    const waveLength2 = 120; // Medium waves
+    const waveLength3 = 80;  // Short, rippling waves
     
-    const wave2 = isY
-      ? Math.sin(time * 1.5 + num.value * 0.018 + pathIndex * 0.5) * waveIntensity * 0.5
-      : Math.cos(time * 1.2 + num.value * 0.018 + pathIndex * 0.5) * waveIntensity * 0.35;
+    // Wave speeds (how fast they travel)
+    const speed1 = 0.3;
+    const speed2 = 0.5;
+    const speed3 = 0.7;
     
-    const wave3 = isY
-      ? Math.sin(time * 3.5 + num.value * 0.006) * waveIntensity * 0.3
-      : Math.cos(time * 3.0 + num.value * 0.006) * waveIntensity * 0.25;
+    // Phase offsets for each path (so they don't all wave the same)
+    const phase1 = pathIndex * 0.5;
+    const phase2 = pathIndex * 0.8;
+    const phase3 = pathIndex * 1.2;
+    
+    // Calculate wave displacement
+    // Horizontal waves (affect Y coordinates more)
+    const wave1 = Math.sin((x / waveLength1 + time * speed1 + phase1) * Math.PI * 2);
+    const wave2 = Math.sin((x / waveLength2 + time * speed2 + phase2) * Math.PI * 2);
+    const wave3 = Math.sin((x / waveLength3 + time * speed3 + phase3) * Math.PI * 2);
+    
+    // Vertical waves (affect X coordinates)
+    const waveX1 = Math.cos((y / waveLength1 + time * speed1 * 0.7 + phase1) * Math.PI * 2);
+    const waveX2 = Math.cos((y / waveLength2 + time * speed2 * 0.7 + phase2) * Math.PI * 2);
+    
+    // Combine waves with different amplitudes
+    const combinedWaveY = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2);
+    const combinedWaveX = (waveX1 * 0.4 + waveX2 * 0.3);
+    
+    // Apply wave distortion - more vertical movement (like ocean waves)
+    const distortion = isY
+      ? combinedWaveY * waveIntensity
+      : combinedWaveX * waveIntensity * 0.6;
 
-    // Combine waves for smooth, balanced motion
-    const combinedWave = wave1 + wave2 + wave3;
+    const newValue = num.value + distortion;
     
-    // Subtle position-based variation for natural feel
-    const positionFactor = 1 + Math.abs(num.value) * 0.0003;
-    const finalWave = combinedWave * positionFactor;
-
-    const newValue = num.value + finalWave;
-    result += newValue.toFixed(2);
+    // Keep precision for smooth curves
+    result += Math.round(newValue * 100) / 100;
 
     lastIndex = num.index + num.length;
   });
@@ -130,18 +148,14 @@ export default function WaveSVG({
         const originalPath = originalPathsRef.current.get(path);
         if (!originalPath) return;
 
-        // Apply wave distortion with balanced, varying intensity per path
-        // Moderate base intensity with smooth variation
-        const baseIntensity = 6;
-        const variation = Math.sin(elapsed * 0.6 + index * 0.5) * 3;
-        const waveIntensity = baseIntensity + variation;
+        // Ocean wave intensity - visible but smooth
+        const baseIntensity = 8; // Base wave strength
+        const variation = Math.sin(elapsed * 0.4 + index * 0.3) * 3; // Gentle variation
+        const waveIntensity = baseIntensity + variation; // 5-11 range
         
-        // Add per-path phase offset for organic movement
-        const phaseOffset = index * 0.3;
-        
-        const distortedPath = applyWaveToPath(
+        const distortedPath = applyOceanWave(
           originalPath, 
-          elapsed + phaseOffset, 
+          elapsed, 
           waveIntensity,
           index
         );
