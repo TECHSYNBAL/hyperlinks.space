@@ -4,6 +4,11 @@
   /* CSS custom properties for viewport height (fallback for older iOS) */
   --vh: 1vh;
   --vw: 1vw;
+  /* Gravity lens properties */
+  --lens-x: 50%;
+  --lens-y: 50%;
+  --lens-zoom: 1;
+  --lens-radius: 200px;
 }
 
 :root,
@@ -61,6 +66,9 @@ body {
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
 }
+
+/* Gravity lens effect - CSS custom properties are set by CursorSmudge component */
+/* The lens effect is applied via clip-path and transforms in the component */
 
 .hyperlinksGrid {
   width: 100vw;
