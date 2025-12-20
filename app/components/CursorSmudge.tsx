@@ -46,6 +46,7 @@ export default function CursorSmudge() {
   const timeRef = useRef(0);
   const [zoom, setZoom] = useState(1.0);
   const [currentTime, setCurrentTime] = useState(0);
+  const cursorSizeRef = useRef(150);
   const [blurRegions, setBlurRegions] = useState<Array<{ x: number; y: number; size: number; blur: number; vx: number; vy: number }>>([]);
   const bodyRef = useRef<HTMLBodyElement | null>(null);
   const ripplesRef = useRef<Ripple[]>([]);
@@ -95,10 +96,18 @@ export default function CursorSmudge() {
     blurRegionsRef.current = initialRegions;
     setBlurRegions(initialRegions);
 
+    // Helper function to calculate cursor size based on orientation
+    const updateCursorSize = () => {
+      if (typeof window === 'undefined') return;
+      const isPortrait = window.innerHeight > window.innerWidth;
+      cursorSizeRef.current = isPortrait ? window.innerWidth / 3 : window.innerHeight / 3;
+    };
+
     // Set canvas size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      updateCursorSize();
     };
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
@@ -385,7 +394,8 @@ export default function CursorSmudge() {
         const y = trail.y + waveY;
         
         // Draw smudge effect with colors (not blue)
-        const radius = 120 * trail.intensity;
+        // Trail radius is 80% of cursor size
+        const radius = cursorSizeRef.current * 0.8 * trail.intensity;
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
         
         // Unisex color mixing - greens, oranges, yellows
@@ -746,7 +756,8 @@ export default function CursorSmudge() {
         const waveX = Math.sin(timeRef.current * 3) * 8;
         const waveY = Math.cos(timeRef.current * 2.5) * 8;
         
-        const cursorRadius = 150;
+        // Cursor size based on orientation: 1/3 height in landscape, 1/3 width in portrait
+        const cursorRadius = cursorSizeRef.current;
         const cursorGradient = ctx.createRadialGradient(
           mousePos.x + waveX,
           mousePos.y + waveY,
@@ -772,7 +783,7 @@ export default function CursorSmudge() {
         
         // Add additional wave rings
         for (let i = 1; i <= 3; i++) {
-          const ringRadius = cursorRadius + i * 30;
+          const ringRadius = cursorRadius + i * (cursorRadius * 0.2);
           const ringIntensity = 0.2 / i;
           const ringWave = Math.sin(timeRef.current * 2 + i) * 5;
           
@@ -834,9 +845,13 @@ export default function CursorSmudge() {
         <>
           {/* Gravity lens rings that pulse */}
           {[0, 1, 2, 3].map((i) => {
-            const ringDelay = i * 0.2;
             const ringScale = zoom + i * 0.1;
-            const ringRadius = 150 + i * 40;
+            // Calculate cursor size based on orientation
+            const isPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+            const baseCursorSize = isPortrait 
+              ? (typeof window !== 'undefined' ? window.innerWidth / 3 : 150)
+              : (typeof window !== 'undefined' ? window.innerHeight / 3 : 150);
+            const ringRadius = baseCursorSize + i * (baseCursorSize * 0.2);
             const ringOpacity = (0.3 - i * 0.08) * (1 - Math.abs(zoom - 1.0) * 0.5);
             
             return (
@@ -872,7 +887,7 @@ export default function CursorSmudge() {
               height: "100%",
               pointerEvents: "none",
               zIndex: 10000,
-              clipPath: `circle(${200 * zoom}px at ${mousePos.x}px ${mousePos.y}px)`,
+              clipPath: `circle(${(typeof window !== 'undefined' ? (window.innerHeight > window.innerWidth ? window.innerWidth / 3 : window.innerHeight / 3) : 200) * zoom}px at ${mousePos.x}px ${mousePos.y}px)`,
               transform: `scale(${zoom})`,
               transformOrigin: `${mousePos.x}px ${mousePos.y}px`,
               transition: "transform 0.1s ease-out, clip-path 0.1s ease-out",
